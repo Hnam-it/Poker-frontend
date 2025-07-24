@@ -1,14 +1,17 @@
 import { Navigate } from 'react-router-dom';
 
-function ProtectedRoute({ user, requiredRole, children }) {
-  if (!user) {
-    // Nếu chưa login thì redirect về login
+function ProtectedRoute({ requiredRole, children }) {
+  // Kiểm tra user từ localStorage thay vì props
+  const storedUser = JSON.parse(localStorage.getItem('user') || 'null');
+  
+  if (!storedUser) {
     return <Navigate to="/login" replace />;
   }
-  if (requiredRole && user.role !== requiredRole) {
-    // Nếu role không đủ thì redirect về trang khác hoặc lỗi
+  
+  if (requiredRole && storedUser.role !== requiredRole) {
     return <Navigate to="/profile" replace />;
   }
+  
   return children;
 }
 

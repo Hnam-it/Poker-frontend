@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
+import { API_BASE_URL } from '../config/apiConfig';
 
 function Login() {
     const [username, setUsername] = useState('');
@@ -9,58 +10,71 @@ function Login() {
     const navigate = useNavigate();
 
     const handleSubmit = async (e) => {
-        e.preventDefault();
-        setIsLoading(true);
-        setMessage('');
+    e.preventDefault();
+    setIsLoading(true);
+    setMessage('');
 
-        try {
-            const res = await fetch('http://localhost:3001/api/auth/login', {
-                method: 'POST',
-                headers: { 
-                    'Content-Type': 'application/json',
-                },
-                body: JSON.stringify({ username, password }),
+    try {
+        const res = await fetch(`${API_BASE_URL}/api/auth/login`, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({ username, password }),
+            credentials: 'include', // Gửi cookie
+        });
+
+        if (res.status === 204) {
+            throw new Error('Server returned no content');
+        }
+
+        const data = await res.json();
+
+        if (!res.ok) {
+            throw new Error(data.message || 'Login failed');
+        }
+
+        if (!data.token || !data.user) {
+            throw new Error('Invalid server response format');
+        }
+
+        // Lưu token và user vào localStorage
+        localStorage.setItem('authToken', data.token);
+        localStorage.setItem('token', data.token);
+        localStorage.setItem('user', JSON.stringify(data.user));
+
+        // Chỉ gọi api admin khi user role là admin
+        if (data.user.role === 'admin') {
+            // Kiểm tra quyền admin, gọi api bảo vệ bằng cookie JWT
+            const adminRes = await fetch(`${API_BASE_URL}/api/admin`, {
+                credentials: 'include',
             });
 
-            // Xử lý response trống
-            if (res.status === 204) {
-                throw new Error('Server returned no content');
+            if (!adminRes.ok) {
+                throw new Error('Admin access denied or API error');
             }
 
-            const data = await res.json();
-            
-            if (!res.ok) {
-                throw new Error(data.message || 'Login failed');
-            }
+            const adminData = await adminRes.json();
+            console.log('Admin API response:', adminData);
 
-            // Kiểm tra cấu trúc response
-            if (!data.token || !data.user) {
-                throw new Error('Invalid server response format');
-            }
-
-            // Lưu thông tin xác thực
-            localStorage.setItem('token', data.token);
-            localStorage.setItem('user', JSON.stringify(data.user));
-
-            // Chuyển hướng theo role
-            if (data.user.role === 'admin') {
-                navigate('/admin/', { replace: true });
-            } else {
-                navigate('/profile', { replace: true });
-            }
-
-        } catch (error) {
-            console.error('Login error:', error);
-            setMessage(error.message);
-            
-            // Xóa thông tin đăng nhập không hợp lệ
-            localStorage.removeItem('token');
-            localStorage.removeItem('user');
-        } finally {
-            setIsLoading(false);
+            // Điều hướng đến admin dashboard
+            navigate('/admin', { replace: true });
+        } else {
+            // Điều hướng user thường
+            navigate('/profile', { replace: true });
         }
-       // setUsername(data.user); 
-    };
+
+    } catch (error) {
+        console.error('Login error:', error);
+        setMessage(error.message);
+
+        localStorage.removeItem('token');
+        localStorage.removeItem('user');
+    } finally {
+        setIsLoading(false);
+    }
+};
+
 
     const styles = {
         wrapper: {
@@ -149,8 +163,8 @@ function Login() {
                         required
                         disabled={isLoading}
                     />
-                    <button 
-                        type="submit" 
+                    <button
+                        type="submit"
                         style={{
                             ...styles.button,
                             ...(isLoading ? styles.buttonDisabled : {})
